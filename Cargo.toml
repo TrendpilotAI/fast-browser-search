@@ -48,16 +48,9 @@ home = "0.5"
 uuid = { version = "1.6", features = ["v4", "serde"] }
 
 # NLP and Semantic Search
-ort = { version = "1.16", features = ["download-binaries"] }
-tokenizers = "0.15"
-tantivy = "0.21"
 whatlang = "0.16"
 rust-stemmers = "1.2"
 unicode-segmentation = "1.10"
 ordered-float = "4.0"
 ndarray = "0.15"
-hnsw = "0.11"
 regex = "1.10"
-
-# For lightweight embeddings (alternative to Candle for now)
-fastembed = "3.1"
