@@ -162,6 +162,183 @@ When working with Claude MCP (Model Context Protocol) agents and tools:
 
 ---
 
+## MCP Server Organization
+
+### Filesystem Hierarchy Pattern
+
+Structure MCP servers for progressive disclosure:
+
+```
+/servers/
+  /gmail/
+    send_email.ts
+    search_inbox.ts
+  /sheets/
+    read_range.ts
+    write_data.ts
+  /salesforce/
+    create_record.ts
+```
+
+**Benefits:**
+- Tools discovered on-demand, not loaded upfront
+- Reduces initial token overhead
+- Enables tool search/discovery utilities
+- Clearer separation of concerns
+
+### Tool Design Principles
+
+- **Lean definitions**: Only essential parameters and return types
+- **Type safety**: Interface definitions for inputs/outputs
+- **Single purpose**: Composable functions that do one thing well
+- **Searchable**: Implement `search_tools()` utility for discovery
+
+---
+
+## Code Execution vs Direct Tool Calls: Decision Matrix
+
+### Use Code Execution When:
+
+- **High-volume data processing**: Filtering 10,000+ rows locally vs passing through context
+- **Complex logic**: Loops, conditionals, error handling without model round-trips
+- **Token efficiency critical**: Can reduce token usage by 90%+ in data pipelines
+- **Privacy-sensitive operations**: Tokenize PII before reaching model context
+- **Multi-step workflows**: Checkpoint intermediate state to filesystem
+
+**Example**: Filter spreadsheet rows in execution environment instead of passing all through context
+
+### Use Direct Tool Calls When:
+
+- **Simple operations**: Single API calls or queries
+- **Low data volume**: Results fit comfortably in context
+- **Debugging required**: Easier to trace individual tool calls
+- **Security uncertain**: Execution environment not fully sandboxed
+
+### Tradeoff Analysis
+
+**Code Execution Gains:**
+- 98.7% token reduction (real case: 150k → 2k tokens)
+- Lower latency (no model round-trips for loops)
+- Better tool composition
+
+**Operational Cost:**
+- Requires secure sandboxing infrastructure
+- Resource limits and monitoring needed
+- More complex error handling
+
+---
+
+## Privacy-Preserving MCP Patterns
+
+### Automatic PII Tokenization
+
+Execute data transformations **before** model sees content:
+
+```typescript
+// In execution environment (not model context)
+async function syncContactsWithTokenization(sheetData, salesforceAPI) {
+  const tokenizedData = sheetData.map(row => ({
+    email: tokenize(row.email),      // Real email never reaches model
+    phone: tokenize(row.phone),      // Real phone never reaches model
+    name: tokenize(row.name)         // Real name never reaches model
+  }));
+
+  // Model only sees tokens, not real PII
+  return await salesforceAPI.createRecords(tokenizedData);
+}
+```
+
+**Flow:**
+1. Google Sheets → Execution Environment (real data)
+2. Execution Environment → Tokenization (PII protected)
+3. Tokenized data → Model context (safe)
+4. Model logic → Execution Environment
+5. Execution Environment → Salesforce (real data restored)
+
+**Real PII flows from source to destination, never through model.**
+
+---
+
+## Code Execution: Resource Limits & Monitoring
+
+### Required Safeguards
+
+- **Execution timeout**: Max 5-10 minutes per run
+- **Memory limits**: 512MB - 2GB depending on use case
+- **CPU throttling**: Prevent runaway processes
+- **Filesystem quotas**: Limit disk usage for checkpoints
+- **Network isolation**: Whitelist only required external services
+
+### Monitoring Checklist
+
+- [ ] Log all code executions with timestamps
+- [ ] Track token usage before/after execution
+- [ ] Monitor resource consumption (CPU, memory, disk)
+- [ ] Alert on execution failures or timeouts
+- [ ] Audit file access patterns
+- [ ] Track PII tokenization success rate
+
+### Sandboxing Requirements
+
+- Container-based isolation (Docker, gVisor, Firecracker)
+- No access to host filesystem
+- Restricted network egress
+- Non-root user execution
+- Read-only system directories
+
+---
+
+## MCP Efficiency Optimization
+
+### Progressive Data Processing
+
+**Anti-pattern:**
+```javascript
+// Loading all 10,000 rows into context
+const allRows = await sheets.readRange('A1:Z10000');
+const filtered = allRows.filter(row => row.status === 'active');
+```
+
+**Better:**
+```javascript
+// Filter in execution environment, return only results
+const activeRows = await executeCode(`
+  const data = await sheets.readRange('A1:Z10000');
+  return data.filter(row => row.status === 'active');
+`);
+// Only ~100 rows reach model context instead of 10,000
+```
+
+### Checkpoint Long Workflows
+
+```typescript
+// Save intermediate results to filesystem
+async function longRunningPipeline(data) {
+  const step1 = await processPhase1(data);
+  await fs.writeFile('/tmp/checkpoint1.json', JSON.stringify(step1));
+
+  const step2 = await processPhase2(step1);
+  await fs.writeFile('/tmp/checkpoint2.json', JSON.stringify(step2));
+
+  return step2;
+}
+```
+
+### Skill Persistence
+
+Save frequently used functions for reuse:
+```typescript
+// Save as skill for future conversations
+await saveSkill('filterActiveContacts', `
+  async function filterActiveContacts(sheetRange) {
+    const data = await sheets.readRange(sheetRange);
+    return data.filter(row => row.status === 'active' && row.verified);
+  }
+`);
+```
+
+---
+
 By following these principles, you'll maintain efficient, actionable conversations and avoid exhausting Claude Code's context window.
 
 ---
