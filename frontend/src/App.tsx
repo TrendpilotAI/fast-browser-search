@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { QueryClient, QueryClientProvider, useQuery, useMutation } from '@tanstack/react-query';
 import axios from 'axios';
-import { Search, Clock, Globe, Chrome, Safari, Compass, Sparkles, TrendingUp, RefreshCw } from 'lucide-react';
+import { Search, Clock, Globe, Chrome, Compass, Sparkles, TrendingUp, RefreshCw, Globe2, Layers, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
 
@@ -139,8 +139,10 @@ function SearchInterface() {
   const getBrowserIcon = (browser: string) => {
     switch (browser.toLowerCase()) {
       case 'chrome': return <Chrome className="w-4 h-4" />;
-      case 'safari': return <Safari className="w-4 h-4" />;
+      case 'safari': return <Globe2 className="w-4 h-4" />;
       case 'arc': return <Compass className="w-4 h-4" />;
+      case 'comet': return <Star className="w-4 h-4" />;
+      case 'thorium': return <Layers className="w-4 h-4" />;
       default: return <Globe className="w-4 h-4" />;
     }
   };
