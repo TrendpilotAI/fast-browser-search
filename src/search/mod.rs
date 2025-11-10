@@ -1,34 +1,33 @@
+pub mod simple;
+pub mod semantic;
+
 use crate::browser::{self, BrowserHistory};
-use crate::db::{falkor::FalkorDB, redis_cache::RedisCache, HistoryDatabase, SearchQuery, SearchResult};
+use crate::db::{simple_storage::SimpleStorage, HistoryDatabase, SearchQuery, SearchResult};
 use crate::memory::MemoryManager;
 use anyhow::{Context, Result};
 use dashmap::DashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 pub struct SearchEngine {
-    falkor_db: Arc<FalkorDB>,
-    redis_cache: Arc<RwLock<RedisCache>>,
+    db: Arc<SimpleStorage>,
     memory_manager: Arc<MemoryManager>,
     indexed_urls: Arc<DashMap<String, bool>>,
 }
 
 impl SearchEngine {
     pub async fn new(
-        falkor_host: &str,
-        falkor_port: u16,
-        redis_url: &str,
+        _falkor_host: &str,
+        _falkor_port: u16,
+        _redis_url: &str,
         zep_url: &str,
         graphiti_url: &str,
         api_key: Option<String>,
     ) -> Result<Self> {
-        let falkor_db = Arc::new(FalkorDB::new(falkor_host, falkor_port, "browser_history")?);
-        let redis_cache = Arc::new(RwLock::new(RedisCache::new(redis_url, 3600).await?));
+        let db = Arc::new(SimpleStorage::new());
         let memory_manager = Arc::new(MemoryManager::new(zep_url, graphiti_url, api_key)?);
 
         Ok(Self {
-            falkor_db,
-            redis_cache,
+            db,
             memory_manager,
             indexed_urls: Arc::new(DashMap::new()),
         })
@@ -81,15 +80,13 @@ impl SearchEngine {
             self.indexed_urls.insert(entry.url.clone(), true);
         }
 
-        // Insert into FalkorDB
-        self.falkor_db
+        // Insert into database
+        self.db
             .insert_entries(new_entries, browser_name)
             .await
-            .context("Failed to insert entries into FalkorDB")?;
+            .context("Failed to insert entries into database")?;
 
-        // Invalidate relevant cache entries
-        let mut cache = self.redis_cache.write().await;
-        cache.invalidate_search_cache("*").await?;
+        // Cache invalidation disabled for now
 
         Ok(())
     }
@@ -99,15 +96,7 @@ impl SearchEngine {
         query: SearchQuery,
         session_id: Option<String>,
     ) -> Result<Vec<SearchResult>> {
-        // Check Redis cache first
-        let mut cache = self.redis_cache.write().await;
-
-        if let Some(cached_results) = cache.get_search_results(&query).await? {
-            tracing::debug!("Returning cached results for query: {}", query.query);
-            return Ok(cached_results);
-        }
-
-        drop(cache); // Release the write lock
+        // Caching disabled for now
 
         // Get context from memory manager if session exists
         let context = if let Some(ref sid) = session_id {
@@ -128,16 +117,12 @@ impl SearchEngine {
             query.clone()
         };
 
-        // Search in FalkorDB
+        // Search in database
         let results = self
-            .falkor_db
+            .db
             .search(enhanced_query)
             .await
-            .context("Failed to search FalkorDB")?;
-
-        // Cache the results
-        let mut cache = self.redis_cache.write().await;
-        cache.set_search_results(&query, &results).await?;
+            .context("Failed to search database")?;
 
         // Update memory if session exists
         if let Some(sid) = session_id {
@@ -182,29 +167,42 @@ impl SearchEngine {
     }
 
     pub async fn get_suggestions(&self, partial_query: &str) -> Result<Vec<String>> {
-        let mut cache = self.redis_cache.write().await;
-        let recent = cache.get_recent_searches().await?;
+        // For now, return suggestions based on domain search
+        let results = self.db.search(SearchQuery {
+            query: partial_query.to_string(),
+            limit: 10,
+            offset: 0,
+            browsers: None,
+            date_from: None,
+            date_to: None,
+            domains: None,
+        }).await?;
 
-        // Filter recent searches that match the partial query
-        let suggestions: Vec<String> = recent
-            .into_iter()
-            .filter(|s| s.to_lowercase().contains(&partial_query.to_lowercase()))
-            .take(10)
-            .collect();
-
-        Ok(suggestions)
+        Ok(results.into_iter().map(|r| r.title.unwrap_or(r.url)).take(10).collect())
     }
 
     pub async fn get_popular_urls(&self, limit: isize) -> Result<Vec<(String, i64)>> {
-        let mut cache = self.redis_cache.write().await;
-        cache.get_popular_urls(limit).await
+        // Get popular URLs from the database directly
+        let results = self.db.search(SearchQuery {
+            query: String::new(),
+            limit: limit as usize,
+            offset: 0,
+            browsers: None,
+            date_from: None,
+            date_to: None,
+            domains: None,
+        }).await?;
+
+        Ok(results.into_iter()
+            .map(|r| (r.url, r.visit_count as i64))
+            .collect())
     }
 
     pub async fn get_domains(&self) -> Result<Vec<String>> {
-        self.falkor_db.get_domains().await
+        self.db.get_domains().await
     }
 
     pub async fn get_related_urls(&self, url: &str, limit: usize) -> Result<Vec<String>> {
-        self.falkor_db.get_related_urls(url, limit).await
+        self.db.get_related_urls(url, limit).await
     }
 }

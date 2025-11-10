@@ -13,7 +13,6 @@ use serde_json::json;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use axum::extract::ws::{Message, WebSocket};
-use futures_util::{SinkExt, StreamExt};
 
 pub struct ApiServer {
     search_engine: Arc<SearchEngine>,

@@ -1,6 +1,7 @@
 pub mod falkor;
 pub mod redis_cache;
 pub mod schema;
+pub mod simple_storage;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -17,6 +18,16 @@ pub struct SearchResult {
     pub related_urls: Vec<String>,
     pub domain: String,
     pub visit_count: i32,
+
+    // New semantic search fields
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clean_site_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub site_category: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_topics: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

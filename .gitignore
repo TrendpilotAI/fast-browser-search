@@ -1,0 +1,33 @@
+# Rust build directory
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo.lock is useful for applications
+# Cargo.lock
+
+# Node modules for frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Environment files
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+temp/

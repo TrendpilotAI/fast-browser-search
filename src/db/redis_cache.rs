@@ -42,12 +42,12 @@ impl RedisCache {
         let key = self.generate_cache_key(query);
         let data = serde_json::to_string(results)?;
 
-        self.conn.set_ex(&key, data, self.ttl_seconds).await?;
+        self.conn.set_ex::<_, _, ()>(&key, data, self.ttl_seconds).await?;
 
         // Also store in a list of recent searches
         let recent_key = "recent_searches";
-        self.conn.lpush(recent_key, &query.query).await?;
-        self.conn.ltrim(recent_key, 0, 99).await?; // Keep only last 100 searches
+        self.conn.lpush::<_, _, ()>(recent_key, &query.query).await?;
+        self.conn.ltrim::<_, ()>(recent_key, 0, 99).await?; // Keep only last 100 searches
 
         Ok(())
     }
@@ -87,7 +87,7 @@ impl RedisCache {
     pub async fn invalidate_search_cache(&mut self, pattern: &str) -> Result<()> {
         let keys: Vec<String> = self.conn.keys(format!("search:*{}*", pattern)).await?;
         for key in keys {
-            self.conn.del(&key).await?;
+            self.conn.del::<_, ()>(&key).await?;
         }
         Ok(())
     }
@@ -165,7 +165,7 @@ impl RedisCache {
         let data = serde_json::to_string(session)?;
 
         // Session expires after 24 hours
-        self.conn.set_ex(&key, data, 86400).await?;
+        self.conn.set_ex::<_, _, ()>(&key, data, 86400).await?;
         Ok(())
     }
 }
