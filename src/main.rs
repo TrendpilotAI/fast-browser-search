@@ -2,6 +2,7 @@ mod api;
 mod browser;
 mod db;
 mod memory;
+mod nlp;
 mod search;
 
 use anyhow::Result;
@@ -19,31 +20,31 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    tracing::info!("Starting Fast Browser History Search (Simple Mode)...");
+    tracing::info!("Starting Fast Browser History Search (Semantic Mode)...");
 
     let api_port: u16 = std::env::var("API_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(3000);
 
-    // Initialize simple search engine
+    // Initialize semantic search engine
     let search_engine = Arc::new(
-        search::simple::SimpleSearchEngine::new().await?,
+        search::semantic::SemanticSearchEngine::new().await?,
     );
 
     // Start initial indexing in the background
     let indexing_engine = search_engine.clone();
     tokio::spawn(async move {
-        tracing::info!("Starting initial browser history indexing...");
+        tracing::info!("Starting initial browser history indexing with semantic enrichment...");
         if let Err(e) = indexing_engine.index_all_browsers().await {
             tracing::error!("Initial indexing failed: {}", e);
         } else {
-            tracing::info!("Initial indexing completed successfully");
+            tracing::info!("Initial indexing completed successfully with semantic data");
         }
     });
 
-    // Create simple API server
-    let api_server = SimpleApiServer::new(search_engine, api_port);
+    // Create semantic API server
+    let api_server = SemanticApiServer::new(search_engine, api_port);
 
     tracing::info!("Fast Browser History Search is ready!");
     tracing::info!("API Server: http://localhost:{}", api_port);
@@ -55,7 +56,7 @@ async fn main() -> Result<()> {
 }
 
 use axum::{
-    extract::{Query, State, WebSocketUpgrade},
+    extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Json},
     routing::{get, post},
@@ -65,13 +66,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
 
-pub struct SimpleApiServer {
-    search_engine: Arc<search::simple::SimpleSearchEngine>,
+pub struct SemanticApiServer {
+    search_engine: Arc<search::semantic::SemanticSearchEngine>,
     port: u16,
 }
 
-impl SimpleApiServer {
-    pub fn new(search_engine: Arc<search::simple::SimpleSearchEngine>, port: u16) -> Self {
+impl SemanticApiServer {
+    pub fn new(search_engine: Arc<search::semantic::SemanticSearchEngine>, port: u16) -> Self {
         Self {
             search_engine,
             port,
@@ -98,12 +99,19 @@ impl SimpleApiServer {
             .allow_headers(Any);
 
         Router::new()
+            // Standard endpoints (backward compatible)
             .route("/api/search", post(search_handler))
             .route("/api/suggest", get(suggest_handler))
             .route("/api/popular", get(popular_handler))
             .route("/api/domains", get(domains_handler))
             .route("/api/related", get(related_handler))
             .route("/api/index", post(index_handler))
+            // Semantic-specific endpoints
+            .route("/api/semantic/search", post(semantic_search_handler))
+            .route("/api/semantic/similar", get(semantic_similar_handler))
+            .route("/api/semantic/topics", get(semantic_topics_handler))
+            .route("/api/semantic/sites", get(semantic_sites_handler))
+            // Health check
             .route("/health", get(health_handler))
             .layer(cors)
             .with_state(Arc::new(self.search_engine))
@@ -129,7 +137,7 @@ struct SearchResponse {
 }
 
 async fn search_handler(
-    State(engine): State<Arc<Arc<search::simple::SimpleSearchEngine>>>,
+    State(engine): State<Arc<Arc<search::semantic::SemanticSearchEngine>>>,
     Json(req): Json<SearchRequest>,
 ) -> impl IntoResponse {
     let start = std::time::Instant::now();
@@ -172,7 +180,7 @@ struct SuggestRequest {
 }
 
 async fn suggest_handler(
-    State(engine): State<Arc<Arc<search::simple::SimpleSearchEngine>>>,
+    State(engine): State<Arc<Arc<search::semantic::SemanticSearchEngine>>>,
     Query(req): Query<SuggestRequest>,
 ) -> impl IntoResponse {
     match engine.get_suggestions(&req.query).await {
@@ -191,7 +199,7 @@ async fn suggest_handler(
 }
 
 async fn popular_handler(
-    State(engine): State<Arc<Arc<search::simple::SimpleSearchEngine>>>,
+    State(engine): State<Arc<Arc<search::semantic::SemanticSearchEngine>>>,
 ) -> impl IntoResponse {
     match engine.get_popular_urls(20).await {
         Ok(urls) => {
@@ -214,7 +222,7 @@ async fn popular_handler(
 }
 
 async fn domains_handler(
-    State(engine): State<Arc<Arc<search::simple::SimpleSearchEngine>>>,
+    State(engine): State<Arc<Arc<search::semantic::SemanticSearchEngine>>>,
 ) -> impl IntoResponse {
     match engine.get_domains().await {
         Ok(domains) => {
@@ -238,7 +246,7 @@ struct RelatedRequest {
 }
 
 async fn related_handler(
-    State(engine): State<Arc<Arc<search::simple::SimpleSearchEngine>>>,
+    State(engine): State<Arc<Arc<search::semantic::SemanticSearchEngine>>>,
     Query(req): Query<RelatedRequest>,
 ) -> impl IntoResponse {
     let limit = req.limit.unwrap_or(10);
@@ -259,7 +267,7 @@ async fn related_handler(
 }
 
 async fn index_handler(
-    State(engine): State<Arc<Arc<search::simple::SimpleSearchEngine>>>,
+    State(engine): State<Arc<Arc<search::semantic::SemanticSearchEngine>>>,
 ) -> impl IntoResponse {
     tokio::spawn(async move {
         if let Err(e) = engine.index_all_browsers().await {
@@ -276,4 +284,115 @@ async fn index_handler(
 
 async fn health_handler() -> impl IntoResponse {
     (StatusCode::OK, Json(json!({ "status": "healthy" }))).into_response()
+}
+
+// Semantic-specific endpoints
+
+#[derive(Debug, Deserialize)]
+struct SemanticSearchRequest {
+    query: String,
+    limit: Option<usize>,
+    use_semantic: Option<bool>,
+}
+
+async fn semantic_search_handler(
+    State(engine): State<Arc<Arc<search::semantic::SemanticSearchEngine>>>,
+    Json(req): Json<SemanticSearchRequest>,
+) -> impl IntoResponse {
+    let start = std::time::Instant::now();
+
+    let query = db::SearchQuery {
+        query: req.query,
+        limit: req.limit.unwrap_or(20),
+        offset: 0,
+        browsers: None,
+        date_from: None,
+        date_to: None,
+        domains: None,
+    };
+
+    let use_semantic = req.use_semantic.unwrap_or(true);
+
+    match engine.semantic_search(query, use_semantic).await {
+        Ok(results) => {
+            let response = json!({
+                "results": results,
+                "total": results.len(),
+                "query_time_ms": start.elapsed().as_millis() as u64,
+                "semantic": use_semantic,
+            });
+            (StatusCode::OK, Json(response)).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Semantic search error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string() })),
+            )
+                .into_response()
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct SimilarRequest {
+    url: String,
+    limit: Option<usize>,
+}
+
+async fn semantic_similar_handler(
+    State(engine): State<Arc<Arc<search::semantic::SemanticSearchEngine>>>,
+    Query(req): Query<SimilarRequest>,
+) -> impl IntoResponse {
+    let limit = req.limit.unwrap_or(10);
+
+    match engine.find_similar(&req.url, limit).await {
+        Ok(results) => {
+            (StatusCode::OK, Json(json!({ "similar": results }))).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Semantic similar error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string() })),
+            )
+                .into_response()
+        }
+    }
+}
+
+async fn semantic_topics_handler(
+    State(engine): State<Arc<Arc<search::semantic::SemanticSearchEngine>>>,
+) -> impl IntoResponse {
+    match engine.get_topics().await {
+        Ok(topics) => {
+            (StatusCode::OK, Json(json!({ "topics": topics }))).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Topics error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string() })),
+            )
+                .into_response()
+        }
+    }
+}
+
+async fn semantic_sites_handler(
+    State(engine): State<Arc<Arc<search::semantic::SemanticSearchEngine>>>,
+) -> impl IntoResponse {
+    match engine.get_sites_summary().await {
+        Ok(sites) => {
+            (StatusCode::OK, Json(json!({ "sites": sites }))).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Sites summary error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string() })),
+            )
+                .into_response()
+        }
+    }
 }

@@ -5,7 +5,7 @@ use crate::nlp::{
     extractor::KeywordExtractor,
     site_mapper::SiteMapper,
     summarizer::Summarizer,
-    EnrichedHistoryEntry, PageMetadata,
+    EnrichedHistoryEntry,
 };
 use anyhow::{Context, Result};
 use dashmap::DashMap;
@@ -382,6 +382,42 @@ impl SemanticSearchEngine {
                     })
                     .collect()
             })
+    }
+
+    // Standard interface methods to match SimpleSearchEngine
+
+    /// Standard search method - uses semantic search by default
+    pub async fn search(&self, query: SearchQuery) -> Result<Vec<SearchResult>> {
+        self.semantic_search(query, true).await
+    }
+
+    /// Get popular URLs by visit count
+    pub async fn get_popular_urls(&self, limit: isize) -> Result<Vec<(String, i64)>> {
+        let all_results = self.db.search(SearchQuery {
+            query: String::new(),
+            limit: limit as usize,
+            offset: 0,
+            browsers: None,
+            date_from: None,
+            date_to: None,
+            domains: None,
+        }).await?;
+
+        Ok(all_results
+            .into_iter()
+            .map(|r| (r.url, r.visit_count as i64))
+            .collect())
+    }
+
+    /// Get all domains from the database
+    pub async fn get_domains(&self) -> Result<Vec<String>> {
+        self.db.get_domains().await
+    }
+
+    /// Get related URLs using semantic similarity
+    pub async fn get_related_urls(&self, url: &str, limit: usize) -> Result<Vec<String>> {
+        let results = self.find_similar(url, limit).await?;
+        Ok(results.into_iter().map(|r| r.url).collect())
     }
 }
 
