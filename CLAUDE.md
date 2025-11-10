@@ -76,6 +76,68 @@ This document provides guidelines for initializing and maintaining efficient con
 
 ---
 
+## 9. 90% Context Window Threshold Protocol
+
+When context usage reaches **90% of the available window**:
+
+### Automatic Actions
+- **Claude Code should auto-compact** the conversation to free up space
+- If compaction is insufficient, prepare for conversation reset
+
+### Living Document Protocol
+Maintain a **SESSION_NOTES.md** file in the project root that captures:
+
+**Required fields for each 90% checkpoint:**
+```markdown
+## Session: [YYYY-MM-DD HH:MM]
+
+### Context Status
+- Context usage: XX% (XXXk/XXXk tokens)
+- Compaction attempted: Yes/No
+
+### Key Accomplishments
+- [Bullet list of completed tasks]
+- [Files modified with line ranges]
+- [Build/test status]
+
+### Important Insights
+- [Technical decisions made]
+- [Blockers encountered and solutions]
+- [Architecture changes]
+
+### Current State
+- [What's working]
+- [What's in progress]
+- [Current error/issue if any]
+
+### Next Steps
+1. [Immediate next task]
+2. [Following tasks in priority order]
+3. [Future considerations]
+
+### Files to Reference
+- `path/to/file.rs:100-200` - [Brief description]
+- `path/to/other.ts:50` - [Brief description]
+
+---
+```
+
+### Workflow at 90% Threshold
+
+1. **Claude Code alerts**: "Context at 90% - initiating checkpoint"
+2. **Save session notes**: Create/append to `SESSION_NOTES.md` with timestamp
+3. **Auto-compact**: Attempt conversation compaction
+4. **If still >90%**: Prepare clean summary for new conversation
+5. **Commit notes**: `git add SESSION_NOTES.md && git commit -m "checkpoint: Session notes at 90% context"`
+
+### Benefits
+- **Continuity**: Never lose progress when switching conversations
+- **Team collaboration**: Anyone can pick up where you left off
+- **Historical record**: Track evolution of solutions over time
+- **Quick restart**: Paste last session note to resume efficiently
+
+---
+
 ## Quick Restart Checklist
 
 1. Copy a 100–300 word summary of the current state.
