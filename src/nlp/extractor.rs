@@ -209,7 +209,7 @@ impl KeywordExtractor {
     /// Detect language of text
     pub fn detect_language(&self, text: &str) -> String {
         detect(text)
-            .map(|info| info.lang().to_code())
+            .map(|info| info.lang().code())
             .unwrap_or("en")
             .to_string()
     }

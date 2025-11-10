@@ -115,17 +115,18 @@ impl Summarizer {
             *domain_visits.entry(domain).or_insert(0) += 1;
 
             // Count hourly activity
-            let hour = entry.visit_time.hour();
+            let hour = entry.visit_time.format("%H").to_string().parse::<u32>().unwrap_or(0);
             *hourly_activity.entry(hour).or_insert(0) += 1;
 
             // Count daily activity
-            let date = entry.visit_time.date_naive().to_string();
+            let date = entry.visit_time.format("%Y-%m-%d").to_string();
             *daily_counts.entry(date).or_insert(0) += 1;
         }
 
         // Find most visited domains
         let mut domain_vec: Vec<(String, usize)> = domain_visits.into_iter().collect();
         domain_vec.sort_by(|a, b| b.1.cmp(&a.1));
+        let unique_domain_count = domain_vec.len();
         let top_domains: Vec<DomainStats> = domain_vec
             .into_iter()
             .take(10)
@@ -152,7 +153,7 @@ impl Summarizer {
 
         BrowsingInsights {
             total_visits: entries.len(),
-            unique_domains: domain_vec.len(),
+            unique_domains: unique_domain_count,
             top_domains,
             peak_activity_hour: peak_hour,
             average_daily_visits: avg_daily_visits,

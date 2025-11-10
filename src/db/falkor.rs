@@ -225,6 +225,11 @@ impl FalkorDB {
                         domain: Self::extract_domain(
                             values.get(0).and_then(|v| v.as_str()).unwrap_or("")
                         ),
+                        // New semantic fields
+                        clean_site_name: None,
+                        site_category: None,
+                        key_topics: None,
+                        summary: None,
                     };
                     results.push(search_result);
                 }
