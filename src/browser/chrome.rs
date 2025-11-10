@@ -1,6 +1,6 @@
 use super::{BrowserExtractor, BrowserHistory, BrowserType, HistoryEntry};
 use anyhow::{Context, Result};
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OpenFlags};
 use std::path::{Path, PathBuf};
 
@@ -139,7 +139,7 @@ fn extract_chromium_history(
         ORDER BY last_visit_time DESC"
     )?;
 
-    let entries: Result<Vec<HistoryEntry>> = stmt
+    let entries: Vec<HistoryEntry> = stmt
         .query_map([], |row| {
             let id: i64 = row.get(0)?;
             let url: String = row.get(1)?;
@@ -164,7 +164,7 @@ fn extract_chromium_history(
                 favicon_url: None,
             })
         })?
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Clean up temp file
     let _ = std::fs::remove_file(&temp_file);
@@ -172,7 +172,7 @@ fn extract_chromium_history(
     Ok(BrowserHistory {
         browser: browser_type,
         profile,
-        entries: entries?,
+        entries,
     })
 }
 

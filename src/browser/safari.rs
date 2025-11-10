@@ -76,7 +76,7 @@ fn extract_safari_history(path: &PathBuf) -> Result<BrowserHistory> {
         ORDER BY hv.visit_time DESC"
     )?;
 
-    let entries: Result<Vec<HistoryEntry>> = stmt
+    let entries: Vec<HistoryEntry> = stmt
         .query_map([], |row| {
             let id: i64 = row.get(0)?;
             let url: String = row.get(1)?;
@@ -99,7 +99,7 @@ fn extract_safari_history(path: &PathBuf) -> Result<BrowserHistory> {
                 favicon_url: None,
             })
         })?
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Clean up temp file
     let _ = std::fs::remove_file(&temp_file);
@@ -107,7 +107,7 @@ fn extract_safari_history(path: &PathBuf) -> Result<BrowserHistory> {
     Ok(BrowserHistory {
         browser: BrowserType::Safari,
         profile: "Default".to_string(),
-        entries: entries?,
+        entries,
     })
 }
 
@@ -117,7 +117,7 @@ fn cocoa_to_datetime(cocoa_timestamp: f64) -> DateTime<Utc> {
     const COCOA_EPOCH_OFFSET: i64 = 978307200; // Seconds between 1970-01-01 and 2001-01-01
 
     let seconds_since_unix = cocoa_timestamp as i64 + COCOA_EPOCH_OFFSET;
-    let nanos = ((cocoa_timestamp.fract() * 1_000_000_000.0) as u32);
+    let nanos = (cocoa_timestamp.fract() * 1_000_000_000.0) as u32;
 
     DateTime::from_timestamp(seconds_since_unix, nanos)
         .unwrap_or_else(|| Utc::now())

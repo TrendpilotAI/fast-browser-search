@@ -29,8 +29,9 @@ impl ApiServer {
     }
 
     pub async fn run(self) -> Result<()> {
+        let port = self.port;  // Extract port before moving self
         let app = self.build_router();
-        let addr = format!("0.0.0.0:{}", self.port);
+        let addr = format!("0.0.0.0:{}", port);
 
         tracing::info!("API server listening on {}", addr);
 

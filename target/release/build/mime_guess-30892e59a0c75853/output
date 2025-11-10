@@ -1,0 +1,1 @@
+cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/Users/nathanstevenson/Development/fast-browser-search/target/release/build/mime_guess-30892e59a0c75853/out/mime_types_generated.rs

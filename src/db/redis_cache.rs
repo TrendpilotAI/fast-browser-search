@@ -1,9 +1,8 @@
 use super::{SearchQuery, SearchResult};
 use anyhow::{Context, Result};
-use redis::aio::{ConnectionManager, ConnectionManagerConfig};
+use redis::aio::ConnectionManager;
 use redis::{AsyncCommands, Client};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 pub struct RedisCache {
     conn: ConnectionManager,
@@ -15,11 +14,7 @@ impl RedisCache {
         let client = Client::open(redis_url)
             .context("Failed to create Redis client")?;
 
-        let config = ConnectionManagerConfig::new()
-            .set_connection_timeout(Duration::from_secs(5))
-            .set_response_timeout(Duration::from_secs(2));
-
-        let conn = ConnectionManager::new_with_config(client, config).await
+        let conn = ConnectionManager::new(client).await
             .context("Failed to connect to Redis")?;
 
         Ok(Self {
