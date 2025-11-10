@@ -148,6 +148,20 @@ Maintain a **SESSION_NOTES.md** file in the project root that captures:
 
 ---
 
+## Claude MCP Agent Best Practices
+
+When working with Claude MCP (Model Context Protocol) agents and tools:
+
+- **Load tool definitions on demand**: Don't load all tool schemas up front—fetch only what's needed for the current task to minimize token usage.
+- **Write agent workflows as code**: Use TypeScript or Python for maintainable, version-controlled agent logic instead of natural language prompts.
+- **Filter and process raw results**: Clean and summarize raw tool outputs before returning to the model context—don't dump large JSON responses directly.
+- **Persist intermediate state**: For long-running tasks, save checkpoints to disk or databases to enable resumability if conversations reset.
+- **Tokenize all PII and sensitive info**: Never log raw passwords, API keys, or personal data—use tokenization or redaction.
+- **Save reusable skills/scripts**: Document agent capabilities in SKILL.md files with clear usage examples and parameter descriptions.
+- **Ensure sandboxed execution**: Run agent-generated code in isolated, monitored environments with appropriate security controls for reliability and safety.
+
+---
+
 By following these principles, you'll maintain efficient, actionable conversations and avoid exhausting Claude Code's context window.
 
 ---
