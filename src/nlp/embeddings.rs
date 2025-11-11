@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use ndarray::Array1;
 use ordered_float::OrderedFloat;
 use std::collections::HashMap;

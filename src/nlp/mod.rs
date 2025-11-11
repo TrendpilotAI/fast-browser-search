@@ -3,7 +3,6 @@ pub mod extractor;
 pub mod embeddings;
 pub mod summarizer;
 
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

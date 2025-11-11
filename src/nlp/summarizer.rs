@@ -1,4 +1,3 @@
-use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 
@@ -12,9 +11,10 @@ impl Summarizer {
     pub fn summarize_entry(title: Option<&str>, url: &str, keywords: &[String]) -> String {
         if let Some(title) = title {
             // If we have a title, use it as the base summary
-            if title.len() > 100 {
-                // Truncate long titles
-                format!("{}...", &title[..97])
+            if title.chars().count() > 100 {
+                // Truncate long titles safely (respecting UTF-8 char boundaries)
+                let truncated: String = title.chars().take(97).collect();
+                format!("{}...", truncated)
             } else {
                 title.to_string()
             }
