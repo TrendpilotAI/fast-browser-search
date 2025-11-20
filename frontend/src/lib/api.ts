@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/tauri';
 import axios from 'axios';
 
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI__' in window;
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = 'http://localhost:3002/api';
 
 export type SearchResult = {
   url: string;

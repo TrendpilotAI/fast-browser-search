@@ -4,6 +4,7 @@ import { api, SearchResult } from './lib/api';
 import { Search, Clock, Globe, Chrome, Compass, Sparkles, TrendingUp, RefreshCw, Globe2, Layers, Star, Mail } from 'lucide-react';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
+import { CommandPalette } from './components/CommandPalette';
 
 const queryClient = new QueryClient();
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI__' in window;
@@ -131,9 +132,14 @@ function SearchInterface() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Sparkles className="w-8 h-8 text-blue-500" />
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Fast Browser Search
-              </h1>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Ultra Fast Search
+                </h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Press <kbd className="px-1.5 py-0.5 text-[10px] font-semibold bg-gray-100 dark:bg-gray-700 rounded">⌘K</kbd> for quick search
+                </p>
+              </div>
             </div>
 // ... inside SearchInterface component, in the Header section ...
 
@@ -176,6 +182,13 @@ function SearchInterface() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onFocus={(e) => {
+                // Show hint: you can use ⌘K for quick access
+                e.target.placeholder = "Search here or press ⌘K for quick search...";
+              }}
+              onBlur={(e) => {
+                e.target.placeholder = "Search your browsing history...";
+              }}
               placeholder="Search your browsing history..."
               className="w-full pl-12 pr-4 py-4 text-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoFocus
@@ -352,6 +365,7 @@ function SearchInterface() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <CommandPalette />
       <SearchInterface />
     </QueryClientProvider>
   );
