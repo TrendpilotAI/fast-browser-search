@@ -488,22 +488,4 @@ fn extract_html_from_payload(payload: &MessagePayload) -> Option<String> {
     None
 }
 
-/// Extract Gmail history as browser history entries
-pub async fn get_gmail_history(
-    client: &GmailClient,
-    max_messages: usize,
-) -> Result<Vec<HistoryEntry>> {
-    tracing::info!("Fetching up to {} Gmail messages...", max_messages);
-
-    let messages = client
-        .fetch_messages_batch(max_messages, None)
-        .await
-        .context("Failed to fetch Gmail messages")?;
-
-    tracing::info!("Fetched {} Gmail messages", messages.len());
-
-    let entries: Vec<HistoryEntry> = messages.into_iter().map(Into::into).collect();
-
-    Ok(entries)
-}
 

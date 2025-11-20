@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { api, SearchResult } from '../lib/api';
-import { debounce } from 'lodash';
+import debounce from 'lodash/debounce';
 
 export const useCommandEngine = () => {
   const [query, setQuery] = useState('');
