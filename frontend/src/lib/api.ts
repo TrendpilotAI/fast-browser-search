@@ -9,9 +9,15 @@ export interface SearchResult {
   description?: string;
   last_visit?: string;
   visit_count?: number;
-  source: 'chrome' | 'safari' | 'arc' | 'gmail' | 'history' | 'web'; // Added 'web' as fallback
+  source: 'chrome' | 'safari' | 'arc' | 'gmail' | 'history' | 'web'; 
   score?: number;
   tags?: string[];
+  
+  // New Semantic Fields
+  clean_site_name?: string;
+  site_category?: string;
+  key_topics?: string[];
+  summary?: string;
 }
 
 export interface SearchResponse {

@@ -8,25 +8,47 @@ pub struct Summarizer;
 
 impl Summarizer {
     /// Generate a summary for a single entry
-    pub fn summarize_entry(title: Option<&str>, url: &str, keywords: &[String]) -> String {
-        if let Some(title) = title {
-            // If we have a title, use it as the base summary
-            if title.chars().count() > 100 {
-                // Truncate long titles safely (respecting UTF-8 char boundaries)
-                let truncated: String = title.chars().take(97).collect();
-                format!("{}...", truncated)
-            } else {
-                title.to_string()
-            }
+    pub fn summarize_entry(
+        title: Option<&str>,
+        url: &str,
+        clean_site_name: Option<&str>,
+        site_category: Option<&str>,
+        topics: &[String],
+    ) -> String {
+        let site_name = clean_site_name.unwrap_or_else(|| url.split('/').nth(2).unwrap_or(url));
+        
+        // Construct a natural language description
+        let mut parts = Vec::new();
+        
+        // Part 1: Category/Type
+        if let Some(category) = site_category {
+            parts.push(format!("A {} page on {}", category.to_lowercase(), site_name));
         } else {
-            // Generate summary from URL and keywords
-            let domain = url.split('/').nth(2).unwrap_or(url);
-            if !keywords.is_empty() {
-                format!("Page about {} on {}", keywords.join(", "), domain)
+            parts.push(format!("A page on {}", site_name));
+        }
+
+        // Part 2: Content/Topics
+        if !topics.is_empty() {
+            let topic_str = if topics.len() > 3 {
+                format!("{}, {}, and others", topics[0], topics[1])
             } else {
-                format!("Visit to {}", domain)
+                topics.join(", ")
+            };
+            parts.push(format!("about {}", topic_str));
+        }
+
+        // Part 3: Title context (if available and not redundant)
+        if let Some(t) = title {
+            if !t.is_empty() && t != site_name {
+                 // If title is very similar to the summary so far, skip it or integrate it?
+                 // For now, we return the constructed summary as the "description"
+                 // and the title remains the title.
+                 // But if we want a rich summary:
+                 return format!("{} - {}", parts.join(" "), t);
             }
         }
+
+        parts.join(" ")
     }
 
     /// Group entries into browsing sessions

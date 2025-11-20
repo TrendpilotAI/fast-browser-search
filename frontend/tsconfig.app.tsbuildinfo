@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/lib/api.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/hooks/usecommandengine.ts","./src/lib/api.ts","./src/ui/commandpalette.tsx","./src/ui/tokens.ts"],"version":"5.9.3"}

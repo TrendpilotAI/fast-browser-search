@@ -22,6 +22,37 @@ const SourceIcon = ({ source }: { source: string }) => {
   }
 };
 
+// --- Helpers ---
+
+const generateNaturalLanguageMetadata = (item: SearchResult) => {
+  const visits = item.visit_count || 1;
+  const visitText = visits === 1 ? 'once' : `${visits} times`;
+  
+  // Simple date formatting
+  let timeAgo = 'recently';
+  if (item.last_visit) {
+      const date = new Date(item.last_visit);
+      const diff = Date.now() - date.getTime();
+      
+      if (diff < 24 * 60 * 60 * 1000) {
+          timeAgo = 'today at ' + date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      } else if (diff < 48 * 60 * 60 * 1000) {
+          timeAgo = 'yesterday';
+      } else {
+          timeAgo = 'on ' + date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      }
+  }
+
+  const parts = [];
+  parts.push(`You've visited this ${item.site_category?.toLowerCase() || 'page'} ${visitText}, last seen ${timeAgo}.`);
+  
+  if (item.key_topics && item.key_topics.length > 0) {
+      parts.push(`The content relates to ${item.key_topics.slice(0, 3).join(', ')}.`);
+  }
+  
+  return parts.join(' ');
+};
+
 // --- Sub-Components ---
 
 const ResultRow = ({ 
@@ -348,35 +379,49 @@ export const CommandPalette = () => {
                             </div>
                          </div>
 
-                         {/* Preview Content Mock */}
+                         {/* Preview Content */}
                          <div className="flex-1 bg-bg-primary/50 rounded-xl border border-border-subtle p-6 overflow-y-auto relative">
                             <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-bg-primary/50 to-transparent pointer-events-none" />
                             
-                            <div className="space-y-4">
-                                <div className="h-2 w-3/4 bg-surface-active rounded-full animate-pulse" />
-                                <div className="h-2 w-full bg-surface-active rounded-full animate-pulse delay-75" />
-                                <div className="h-2 w-5/6 bg-surface-active rounded-full animate-pulse delay-150" />
-                                <div className="h-2 w-4/5 bg-surface-active rounded-full animate-pulse delay-200" />
-                                <div className="h-2 w-full bg-surface-active rounded-full animate-pulse delay-300 opacity-50" />
-                            </div>
+                            {/* Summary */}
+                            {selectedItem.summary ? (
+                                <div className="prose prose-sm text-text-secondary mb-6">
+                                    <p className="text-[15px] leading-relaxed">
+                                        {selectedItem.summary}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="text-text-muted italic mb-6">No summary available</div>
+                            )}
 
                             <div className="mt-8 pt-8 border-t border-border-subtle/50">
                                 <h4 className="text-[11px] uppercase tracking-wider text-text-muted mb-4 font-medium flex items-center gap-2">
-                                    <LayoutGrid size={12} /> Metadata
+                                    <LayoutGrid size={12} /> Insights
                                 </h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-surface p-3 rounded-xl border border-border-subtle">
-                                        <span className="text-[10px] text-text-muted block mb-1">Visits</span>
-                                        <span className="text-[14px] text-text-primary font-mono font-medium">{selectedItem.visit_count || 1}</span>
-                                    </div>
-                                    <div className="bg-surface p-3 rounded-xl border border-border-subtle">
-                                        <span className="text-[10px] text-text-muted block mb-1">Relevance Score</span>
-                                        <div className="flex items-center gap-2">
-                                            <div className="h-1.5 flex-1 bg-bg-primary rounded-full overflow-hidden">
-                                                <div className="h-full w-3/4 bg-accent-primary rounded-full" />
-                                            </div>
-                                            <span className="text-[14px] text-text-primary font-mono font-medium">98%</span>
+                                <div className="grid grid-cols-1 gap-4">
+                                    {/* Relevancy */}
+                                    <div className="bg-surface p-4 rounded-xl border border-border-subtle flex items-center justify-between">
+                                        <div>
+                                            <span className="text-[11px] text-text-muted block mb-0.5">Relevance</span>
+                                            <span className="text-[13px] text-text-primary font-medium">
+                                                {selectedItem.score ? (selectedItem.score * 100).toFixed(0) + '% Match' : 'N/A'}
+                                            </span>
                                         </div>
+                                         {selectedItem.score !== undefined && (
+                                            <div className="w-24 h-1.5 bg-bg-primary rounded-full overflow-hidden">
+                                                <div 
+                                                    className="h-full bg-accent-primary rounded-full" 
+                                                    style={{ width: `${Math.min(selectedItem.score * 100, 100)}%` }} 
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                     {/* Natural Language Metadata */}
+                                    <div className="bg-surface p-4 rounded-xl border border-border-subtle">
+                                        <p className="text-[13px] text-text-secondary leading-relaxed">
+                                            {generateNaturalLanguageMetadata(selectedItem)}
+                                        </p>
                                     </div>
                                 </div>
                             </div>

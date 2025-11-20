@@ -71,10 +71,22 @@ export const useCommandEngine = () => {
           api.suggest(q)
         ]);
 
-        const mappedResults: SearchResult[] = searchRes.results.map(r => ({
-            ...r,
-            source: r.source || 'web', // Fallback
-            tags: r.tags || []
+        const mappedResults: SearchResult[] = searchRes.results.map((r: any) => ({
+            id: r.url, // Ensure ID is unique enough
+            url: r.url,
+            title: r.title || r.url,
+            description: r.summary || r.description || r.url,
+            last_visit: r.visit_time, // Pass raw time, let UI format it
+            visit_count: r.visit_count,
+            source: (r.browser_source ? r.browser_source.toLowerCase() : 'web') as any,
+            score: r.relevance_score,
+            tags: r.key_topics || r.tags || [],
+            
+            // Pass through semantic fields
+            clean_site_name: r.clean_site_name,
+            site_category: r.site_category,
+            key_topics: r.key_topics,
+            summary: r.summary,
         }));
 
         setResults(mappedResults);

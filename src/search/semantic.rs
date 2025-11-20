@@ -163,7 +163,7 @@ impl SemanticSearchEngine {
 
         // Extract keywords and topics
         let title_str = entry.title.as_deref().unwrap_or("");
-        let keywords = self.extractor.extract_keywords(title_str);
+        let _keywords = self.extractor.extract_keywords(title_str);
         let topics = self.extractor.extract_topics(title_str, &entry.url);
 
         // Detect language
@@ -176,7 +176,9 @@ impl SemanticSearchEngine {
         let summary = Some(Summarizer::summarize_entry(
             entry.title.as_deref(),
             &entry.url,
-            &keywords,
+            Some(&clean_site_name),
+            site_category.as_deref(),
+            &topics,
         ));
 
         Ok(EnrichedHistoryEntry {
