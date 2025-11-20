@@ -1,0 +1,31 @@
+[package]
+name = "fast-browser-search-app"
+version = "0.1.0"
+description = "Fast Browser Search Native App"
+authors = ["you"]
+edition = "2021"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "1", features = [] }
+
+[dependencies]
+tauri = { version = "1", features = ["shell-open", "custom-protocol"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+browser-history-search = { path = ".." }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+anyhow = "1.0"
+oauth2 = "4.4"
+reqwest = { version = "0.11", features = ["json"] }
+url = "2.5"
+tokio-stream = "0.1"
+local-ip-address = "0.6"
+warp = "0.3"
+open = "5.0"
+chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22"

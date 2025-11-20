@@ -4,3 +4,4 @@ pub mod api;
 pub mod search;
 pub mod memory;
 pub mod nlp;
+pub mod gmail;

@@ -3,6 +3,9 @@ name = "browser-history-search"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+members = ["src-tauri"]
+
 [dependencies]
 # Web framework
 axum = { version = "0.7", features = ["ws"] }
@@ -10,6 +13,7 @@ tokio = { version = "1", features = ["full"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "fs"] }
 futures-util = "0.3"
+futures = "0.3"
 
 # Database connections
 rusqlite = { version = "0.31", features = ["bundled"] }
@@ -54,3 +58,15 @@ unicode-segmentation = "1.10"
 ordered-float = "4.0"
 ndarray = "0.15"
 regex = "1.10"
+
+# Gmail API and OAuth2
+oauth2 = "4.4"
+base64 = "0.22"
+urlencoding = "2.1"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+opt-level = 3
+strip = "symbols"

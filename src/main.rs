@@ -4,6 +4,7 @@ mod db;
 mod memory;
 mod nlp;
 mod search;
+mod gmail;
 
 use anyhow::Result;
 use std::sync::Arc;
@@ -111,6 +112,10 @@ impl SemanticApiServer {
             .route("/api/semantic/similar", get(semantic_similar_handler))
             .route("/api/semantic/topics", get(semantic_topics_handler))
             .route("/api/semantic/sites", get(semantic_sites_handler))
+            // Gmail endpoints
+            .route("/api/gmail/auth", get(gmail_auth_handler))
+            .route("/api/gmail/callback", get(gmail_callback_handler))
+            .route("/api/gmail/index", post(gmail_index_handler))
             // Health check
             .route("/health", get(health_handler))
             .layer(cors)
@@ -395,4 +400,153 @@ async fn semantic_sites_handler(
                 .into_response()
         }
     }
+}
+
+// Gmail OAuth and indexing endpoints
+
+async fn gmail_auth_handler() -> impl IntoResponse {
+    let client_id = std::env::var("GMAIL_CLIENT_ID")
+        .unwrap_or_else(|_| "".to_string());
+    let redirect_uri = std::env::var("GMAIL_REDIRECT_URI")
+        .unwrap_or_else(|_| "http://localhost:3002/api/gmail/callback".to_string());
+
+    if client_id.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "GMAIL_CLIENT_ID not configured" })),
+        )
+            .into_response();
+    }
+
+    let client_secret = std::env::var("GMAIL_CLIENT_SECRET")
+        .unwrap_or_else(|_| "".to_string());
+    
+    let client = gmail::GmailClient::new(client_id, client_secret, None);
+    let auth_url = client.get_authorization_url(&redirect_uri);
+
+    (StatusCode::OK, Json(json!({ "auth_url": auth_url }))).into_response()
+}
+
+#[derive(Debug, Deserialize)]
+struct GmailCallbackQuery {
+    code: Option<String>,
+    error: Option<String>,
+}
+
+async fn gmail_callback_handler(
+    Query(params): Query<GmailCallbackQuery>,
+) -> impl IntoResponse {
+    if let Some(error) = params.error {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": error })),
+        )
+            .into_response();
+    }
+
+    let code = match params.code {
+        Some(c) => c,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "No authorization code provided" })),
+            )
+                .into_response();
+        }
+    };
+
+    let client_id = std::env::var("GMAIL_CLIENT_ID")
+        .unwrap_or_else(|_| "".to_string());
+    let client_secret = std::env::var("GMAIL_CLIENT_SECRET")
+        .unwrap_or_else(|_| "".to_string());
+    let redirect_uri = std::env::var("GMAIL_REDIRECT_URI")
+        .unwrap_or_else(|_| "http://localhost:3002/api/gmail/callback".to_string());
+
+    if client_id.is_empty() || client_secret.is_empty() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Gmail credentials not configured" })),
+        )
+            .into_response();
+    }
+
+    let client = gmail::GmailClient::new(client_id, client_secret, None);
+    
+    match client.exchange_code(&code, &redirect_uri).await {
+        Ok(token_response) => {
+            // Store refresh token securely (in production, use proper storage)
+            let response = json!({
+                "success": true,
+                "access_token": token_response.access_token,
+                "refresh_token": token_response.refresh_token,
+                "message": "Gmail authentication successful. Use the refresh_token to configure GMAIL_REFRESH_TOKEN environment variable."
+            });
+            (StatusCode::OK, Json(response)).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Gmail OAuth error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string() })),
+            )
+                .into_response()
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct GmailIndexRequest {
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    max_messages: Option<usize>,
+}
+
+async fn gmail_index_handler(
+    State(engine): State<Arc<Arc<search::semantic::SemanticSearchEngine>>>,
+    Json(req): Json<GmailIndexRequest>,
+) -> impl IntoResponse {
+    let client_id = std::env::var("GMAIL_CLIENT_ID")
+        .unwrap_or_else(|_| "".to_string());
+    let client_secret = std::env::var("GMAIL_CLIENT_SECRET")
+        .unwrap_or_else(|_| "".to_string());
+    
+    let refresh_token = req.refresh_token
+        .or_else(|| std::env::var("GMAIL_REFRESH_TOKEN").ok());
+
+    if client_id.is_empty() || client_secret.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Gmail credentials not configured" })),
+        )
+            .into_response();
+    }
+
+    let client = Arc::new(gmail::GmailClient::new(client_id, client_secret, refresh_token));
+    
+    if let Some(access_token) = req.access_token {
+        client.set_access_token(access_token).await;
+    }
+
+    let max_messages = req.max_messages.unwrap_or(10000);
+
+    // Set Gmail client and trigger indexing
+    engine.set_gmail_client(client.clone()).await;
+    
+    tokio::spawn(async move {
+        tracing::info!("Starting Gmail indexing in background...");
+        if let Err(e) = engine.index_all_browsers().await {
+            tracing::error!("Gmail indexing error: {}", e);
+        } else {
+            tracing::info!("Gmail indexing completed");
+        }
+    });
+
+    (
+        StatusCode::ACCEPTED,
+        Json(json!({
+            "message": "Gmail indexing started in background",
+            "max_messages": max_messages
+        })),
+    )
+        .into_response()
 }

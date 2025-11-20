@@ -1,5 +1,6 @@
 use crate::browser::{self, BrowserHistory, HistoryEntry};
 use crate::db::{simple_storage::SimpleStorage, HistoryDatabase, SearchQuery, SearchResult};
+use crate::gmail::GmailClient;
 use crate::nlp::{
     embeddings::{EmbeddingModel, VectorIndex},
     extractor::KeywordExtractor,
@@ -20,6 +21,7 @@ pub struct SemanticSearchEngine {
     extractor: Arc<KeywordExtractor>,
     indexed_urls: Arc<DashMap<String, bool>>,
     enriched_entries: Arc<DashMap<String, EnrichedHistoryEntry>>,
+    gmail_client: Arc<RwLock<Option<Arc<GmailClient>>>>,
 }
 
 impl SemanticSearchEngine {
@@ -36,7 +38,13 @@ impl SemanticSearchEngine {
             extractor: Arc::new(KeywordExtractor::new()),
             indexed_urls: Arc::new(DashMap::new()),
             enriched_entries: Arc::new(DashMap::new()),
+            gmail_client: Arc::new(RwLock::new(None)),
         })
+    }
+
+    /// Set Gmail client for email indexing
+    pub async fn set_gmail_client(&self, client: Arc<GmailClient>) {
+        *self.gmail_client.write().await = Some(client);
     }
 
     pub async fn index_all_browsers(&self) -> Result<()> {
@@ -56,10 +64,57 @@ impl SemanticSearchEngine {
             self.index_browser_history(history).await?;
         }
 
+        // Index Gmail if client is configured
+        if let Some(ref gmail_client) = *self.gmail_client.read().await {
+            tracing::info!("Indexing Gmail messages...");
+            if let Err(e) = self.index_gmail(gmail_client, 10000).await {
+                tracing::warn!("Gmail indexing failed: {}", e);
+            }
+        }
+
         // Second pass: Generate embeddings in batches
         self.generate_all_embeddings().await?;
 
         tracing::info!("Semantic browser history indexing completed");
+        Ok(())
+    }
+
+    async fn index_gmail(&self, client: &GmailClient, max_messages: usize) -> Result<()> {
+        let messages = client.fetch_messages_batch(max_messages, None).await?;
+        let gmail_entries: Vec<HistoryEntry> = messages.into_iter().map(Into::into).collect();
+        
+        if gmail_entries.is_empty() {
+            tracing::info!("No Gmail messages to index");
+            return Ok(());
+        }
+
+        tracing::info!("Indexing {} Gmail messages", gmail_entries.len());
+
+        // Filter out already indexed messages
+        let new_entries: Vec<_> = gmail_entries
+            .into_iter()
+            .filter(|entry| !self.indexed_urls.contains_key(&entry.url))
+            .collect();
+
+        if new_entries.is_empty() {
+            tracing::debug!("No new Gmail entries to index");
+            return Ok(());
+        }
+
+        // Process and enrich entries
+        for entry in &new_entries {
+            let enriched = self.enrich_entry(entry, "Gmail").await?;
+            self.enriched_entries.insert(entry.url.clone(), enriched);
+            self.indexed_urls.insert(entry.url.clone(), true);
+        }
+
+        // Insert into database
+        self.db
+            .insert_entries(new_entries, "Gmail".to_string())
+            .await
+            .context("Failed to insert Gmail entries into database")?;
+
+        tracing::info!("Gmail indexing completed");
         Ok(())
     }
 

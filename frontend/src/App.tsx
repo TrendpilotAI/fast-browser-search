@@ -1,29 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
 import { QueryClient, QueryClientProvider, useQuery, useMutation } from '@tanstack/react-query';
-import axios from 'axios';
-import { Search, Clock, Globe, Chrome, Compass, Sparkles, TrendingUp, RefreshCw, Globe2, Layers, Star } from 'lucide-react';
+import { api, SearchResult } from './lib/api';
+import { Search, Clock, Globe, Chrome, Compass, Sparkles, TrendingUp, RefreshCw, Globe2, Layers, Star, Mail } from 'lucide-react';
 import { format } from 'date-fns';
 import { clsx } from 'clsx';
 
 const queryClient = new QueryClient();
-const API_BASE = 'http://localhost:3002/api';
-
-interface SearchResult {
-  url: string;
-  title?: string;
-  visit_time: string;
-  visit_count: number;
-  relevance_score: number;
-  browser_source: string;
-  domain: string;
-  related_urls: string[];
-}
-
-interface SearchResponse {
-  results: SearchResult[];
-  total: number;
-  query_time_ms: number;
-}
+const IS_TAURI = typeof window !== 'undefined' && '__TAURI__' in window;
 
 function SearchInterface() {
   const [query, setQuery] = useState('');
@@ -32,9 +15,11 @@ function SearchInterface() {
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
   const [realtimeResults, setRealtimeResults] = useState<SearchResult[]>([]);
 
-  // Connect WebSocket for real-time search
+  // Connect WebSocket for real-time search (only in web mode)
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:3002/ws');
+    if (IS_TAURI) return;
+
+    const ws = new WebSocket('ws://localhost:3000/ws');
 
     ws.onopen = () => {
       console.log('WebSocket connected');
@@ -58,16 +43,11 @@ function SearchInterface() {
   }, []);
 
   // Search query
-  const { data: searchData, isLoading, refetch } = useQuery({
+  const { data: searchData, isLoading } = useQuery({
     queryKey: ['search', searchTerm, selectedBrowsers],
     queryFn: async () => {
       if (!searchTerm) return null;
-      const response = await axios.post<SearchResponse>(`${API_BASE}/search`, {
-        query: searchTerm,
-        limit: 50,
-        browsers: selectedBrowsers.length > 0 ? selectedBrowsers : undefined,
-      });
-      return response.data;
+      return await api.search(searchTerm, selectedBrowsers.length > 0 ? selectedBrowsers : undefined);
     },
     enabled: !!searchTerm,
   });
@@ -77,10 +57,7 @@ function SearchInterface() {
     queryKey: ['suggestions', query],
     queryFn: async () => {
       if (query.length < 2) return [];
-      const response = await axios.get(`${API_BASE}/suggest`, {
-        params: { query }
-      });
-      return response.data.suggestions;
+      return await api.suggest(query);
     },
     enabled: query.length >= 2,
   });
@@ -89,8 +66,7 @@ function SearchInterface() {
   const { data: popularUrls } = useQuery({
     queryKey: ['popular'],
     queryFn: async () => {
-      const response = await axios.get(`${API_BASE}/popular`);
-      return response.data.popular;
+      return await api.getPopular();
     },
   });
 
@@ -98,28 +74,26 @@ function SearchInterface() {
   const { data: domains } = useQuery({
     queryKey: ['domains'],
     queryFn: async () => {
-      const response = await axios.get(`${API_BASE}/domains`);
-      return response.data.domains;
+      return await api.getDomains();
     },
   });
 
   // Index mutation
   const indexMutation = useMutation({
     mutationFn: async () => {
-      const response = await axios.post(`${API_BASE}/index`);
-      return response.data;
+      return await api.index();
     },
     onSuccess: () => {
       queryClient.invalidateQueries();
     },
   });
 
-  const handleSearch = useCallback((e: React.FormEvent) => {
+  const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setSearchTerm(query);
 
-    // Send via WebSocket for real-time results
-    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+    // Send via WebSocket for real-time results (only in web mode)
+    if (!IS_TAURI && wsConnection && wsConnection.readyState === WebSocket.OPEN) {
       wsConnection.send(JSON.stringify({
         query,
         limit: 50,
@@ -161,14 +135,34 @@ function SearchInterface() {
                 Fast Browser Search
               </h1>
             </div>
-            <button
-              onClick={() => indexMutation.mutate()}
-              disabled={indexMutation.isPending}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
-            >
-              <RefreshCw className={clsx('w-4 h-4', indexMutation.isPending && 'animate-spin')} />
-              <span>{indexMutation.isPending ? 'Indexing...' : 'Re-index'}</span>
-            </button>
+// ... inside SearchInterface component, in the Header section ...
+
+            <div className="flex items-center space-x-2">
+              {IS_TAURI && (
+                <button
+                  onClick={async () => {
+                    try {
+                      await api.connectGoogle();
+                    } catch (e) {
+                      console.error(e);
+                      alert('Failed to start Google Auth');
+                    }
+                  }}
+                  className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Connect Gmail</span>
+                </button>
+              )}
+              <button
+                onClick={() => indexMutation.mutate()}
+                disabled={indexMutation.isPending}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
+              >
+                <RefreshCw className={clsx('w-4 h-4', indexMutation.isPending && 'animate-spin')} />
+                <span>{indexMutation.isPending ? 'Indexing...' : 'Re-index'}</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>

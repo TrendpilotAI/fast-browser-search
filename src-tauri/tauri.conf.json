@@ -1,0 +1,44 @@
+{
+  "build": {
+    "beforeDevCommand": "cd ../frontend && bun run dev",
+    "beforeBuildCommand": "",
+    "devPath": "http://localhost:5173",
+    "distDir": "../frontend/dist",
+    "withGlobalTauri": true
+  },
+  "package": {
+    "productName": "Fast Browser Search",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.fastbrowsersearch.app",
+      "icon": [
+        "icons/icon.png"
+      ]
+    },
+    "security": {
+      "csp": null,
+      "dangerousDisableAssetCspModification": false
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "Fast Browser Search",
+        "width": 1200,
+        "height": 800
+      }
+    ]
+  }
+}
+
