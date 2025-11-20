@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { clsx } from 'clsx';
 
 const queryClient = new QueryClient();
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = 'http://localhost:3002/api';
 
 interface SearchResult {
   url: string;
@@ -34,7 +34,7 @@ function SearchInterface() {
 
   // Connect WebSocket for real-time search
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:3000/ws');
+    const ws = new WebSocket('ws://localhost:3002/ws');
 
     ws.onopen = () => {
       console.log('WebSocket connected');

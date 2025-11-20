@@ -189,39 +189,54 @@ impl SemanticSearchEngine {
 
     pub async fn semantic_search(&self, query: SearchQuery, use_semantic: bool) -> Result<Vec<SearchResult>> {
         if use_semantic && !query.query.is_empty() {
-            // Generate query embedding
-            let model = self.embedding_model.read().await;
-            let query_embedding = model.embed_text(&query.query).await?;
-            drop(model);
-
-            // Search in vector index
+            // Check if vector index has data
             let index = self.vector_index.read().await;
-            let similar_items = index.search(&query_embedding, query.limit * 2); // Get more candidates
+            let has_indexed_data = !index.is_empty();
+            drop(index);
 
-            // Convert to search results
-            let mut results = Vec::new();
-            for (url, similarity_score) in similar_items.iter().take(query.limit) {
-                if let Some(entry) = self.enriched_entries.get(url) {
-                    results.push(SearchResult {
-                        url: entry.url.clone(),
-                        title: entry.title.clone(),
-                        visit_time: entry.visit_time,
-                        visit_count: entry.visit_count,
-                        relevance_score: *similarity_score,
-                        browser_source: entry.browser_source.clone(),
-                        related_urls: vec![],
-                        domain: entry.metadata.domain.clone(),
-                        // New fields from enriched data
-                        clean_site_name: Some(entry.clean_site_name.clone()),
-                        site_category: entry.site_category.clone(),
-                        key_topics: Some(entry.key_topics.clone()),
-                        summary: entry.summary.clone(),
-                    });
+            if has_indexed_data {
+                // Generate query embedding
+                let model = self.embedding_model.read().await;
+                let query_embedding = model.embed_text(&query.query).await?;
+                drop(model);
+
+                // Search in vector index
+                let index = self.vector_index.read().await;
+                let similar_items = index.search(&query_embedding, query.limit * 2); // Get more candidates
+                drop(index);
+
+                // Convert to search results
+                let mut results = Vec::new();
+                for (url, similarity_score) in similar_items.iter().take(query.limit) {
+                    if let Some(entry) = self.enriched_entries.get(url) {
+                        results.push(SearchResult {
+                            url: entry.url.clone(),
+                            title: entry.title.clone(),
+                            visit_time: entry.visit_time,
+                            visit_count: entry.visit_count,
+                            relevance_score: *similarity_score,
+                            browser_source: entry.browser_source.clone(),
+                            related_urls: vec![],
+                            domain: entry.metadata.domain.clone(),
+                            // New fields from enriched data
+                            clean_site_name: Some(entry.clean_site_name.clone()),
+                            site_category: entry.site_category.clone(),
+                            key_topics: Some(entry.key_topics.clone()),
+                            summary: entry.summary.clone(),
+                        });
+                    }
+                }
+
+                // If semantic search found results, return them
+                if !results.is_empty() {
+                    return Ok(results);
                 }
             }
-
-            Ok(results)
-        } else {
+            // Fall through to keyword search if semantic search returned no results
+        }
+        
+        // Fall back to keyword search (or use it directly if semantic is disabled)
+        {
             // Fall back to keyword search
             let results = self.db.search(query).await?;
 
