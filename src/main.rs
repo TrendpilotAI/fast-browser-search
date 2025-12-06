@@ -298,6 +298,10 @@ struct SemanticSearchRequest {
     query: String,
     limit: Option<usize>,
     use_semantic: Option<bool>,
+    browsers: Option<Vec<String>>,
+    date_from: Option<String>,
+    date_to: Option<String>,
+    domains: Option<Vec<String>>,
 }
 
 async fn semantic_search_handler(
@@ -310,10 +314,12 @@ async fn semantic_search_handler(
         query: req.query,
         limit: req.limit.unwrap_or(20),
         offset: 0,
-        browsers: None,
-        date_from: None,
-        date_to: None,
-        domains: None,
+        browsers: req.browsers,
+        date_from: req.date_from.and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+            .map(|dt| dt.with_timezone(&chrono::Utc)),
+        date_to: req.date_to.and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+            .map(|dt| dt.with_timezone(&chrono::Utc)),
+        domains: req.domains,
     };
 
     let use_semantic = req.use_semantic.unwrap_or(true);

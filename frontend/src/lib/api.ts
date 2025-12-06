@@ -32,16 +32,27 @@ export interface Suggestion {
   type: 'query' | 'url' | 'domain';
 }
 
+export interface SearchOptions {
+  useSemantic?: boolean;
+  browsers?: string[];
+  limit?: number;
+}
+
 export const api = {
   /**
    * Perform a semantic search (or standard search if semantic is toggled off)
    */
-  search: async (query: string, useSemantic = true): Promise<SearchResponse> => {
-    const { data } = await axios.post<SearchResponse>(`${API_BASE}/semantic/search`, {
+  search: async (query: string, options: SearchOptions = {}): Promise<SearchResponse> => {
+    const { useSemantic = true, browsers, limit = 20 } = options;
+    const payload: any = {
       query,
-      limit: 20,
+      limit,
       use_semantic: useSemantic,
-    });
+    };
+    if (browsers && browsers.length > 0) {
+      payload.browsers = browsers;
+    }
+    const { data } = await axios.post<SearchResponse>(`${API_BASE}/semantic/search`, payload);
     return data;
   },
 

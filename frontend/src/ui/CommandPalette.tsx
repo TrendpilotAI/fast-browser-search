@@ -7,6 +7,8 @@ import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { tokens } from './tokens';
 import { useCommandEngine } from '../hooks/useCommandEngine';
 import { SearchResult } from '../lib/api';
+import { highlightSearchTerms } from '../utils/highlight';
+import { generateRelevanceExplanation } from '../utils/relevance';
 import clsx from 'clsx';
 
 // --- Icons & Visuals ---
@@ -57,15 +59,18 @@ const generateNaturalLanguageMetadata = (item: SearchResult) => {
 
 const ResultRow = ({ 
   item, 
+  query,
   selected, 
   onClick, 
   onMouseEnter 
 }: { 
-  item: SearchResult, 
+  item: SearchResult;
+  query: string;
   selected: boolean, 
   onClick: () => void,
   onMouseEnter: () => void
 }) => {
+  const relevanceExplanation = generateRelevanceExplanation(item, query);
   return (
     <motion.div 
       layout
@@ -105,7 +110,7 @@ const ResultRow = ({
             "text-[14px] truncate transition-colors",
             selected ? "text-text-primary font-medium" : "text-text-secondary"
           )}>
-            {item.title || item.url}
+            {highlightSearchTerms(item.title || item.url, query)}
           </span>
           
           {/* Tags */}
@@ -116,12 +121,37 @@ const ResultRow = ({
           ))}
         </div>
         
-        <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
-          <span className={clsx(selected ? "text-text-secondary" : "")}>
-            {item.source === 'history' ? 'Previous Search' : `From ${item.source}`}
-          </span>
-          <span>•</span>
-          <span className="truncate max-w-[300px]">{item.description || item.url}</span>
+        <div className="flex flex-col gap-1">
+          {/* Summary with highlighting */}
+          {item.summary && (
+            <div className="text-[12px] text-text-secondary line-clamp-1">
+              {highlightSearchTerms(item.summary, query)}
+            </div>
+          )}
+          
+          {/* Relevance Explanation */}
+          <div className="text-[11px] text-text-muted">
+            {relevanceExplanation}
+          </div>
+          
+          {/* Metadata */}
+          <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
+            <span className={clsx(selected ? "text-text-secondary" : "")}>
+              {item.source === 'history' ? 'Previous Search' : `From ${item.source}`}
+            </span>
+            {item.visit_count !== undefined && item.visit_count > 0 && (
+              <>
+                <span>•</span>
+                <span>{item.visit_count} visits</span>
+              </>
+            )}
+            {item.score !== undefined && (
+              <>
+                <span>•</span>
+                <span>{Math.round(item.score * 100)}% match</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -150,7 +180,7 @@ const ResultRow = ({
 
 // --- Main Component ---
 
-export const CommandPalette = () => {
+export const CommandPalette = ({ onClose }: { onClose?: () => void }) => {
   const { 
     query, setQuery, results, suggestions, isLoading, 
     selectedIndex, setSelectedIndex, handleNavigation, addToHistory 
@@ -172,7 +202,10 @@ export const CommandPalette = () => {
       }
       if (e.key === 'Escape') {
         if (query) setQuery('');
-        else setIsOpen(false);
+        else {
+          setIsOpen(false);
+          onClose?.();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -211,11 +244,17 @@ export const CommandPalette = () => {
              } else {
                  addToHistory(query || item.title);
                  window.open(item.url, '_blank');
-                 setIsOpen(false);
+                 handleClose();
              }
           }
       }
       handleNavigation(e);
+  };
+
+  // Close handler
+  const handleClose = () => {
+    setIsOpen(false);
+    onClose?.();
   };
 
   if (!isOpen) return null;
@@ -306,7 +345,8 @@ export const CommandPalette = () => {
                     {results.map((item, index) => (
                         <ResultRow 
                             key={item.id || index} 
-                            item={item} 
+                            item={item}
+                            query={query}
                             selected={index === selectedIndex}
                             onClick={() => {
                                 setSelectedIndex(index);
@@ -387,12 +427,19 @@ export const CommandPalette = () => {
                             {selectedItem.summary ? (
                                 <div className="prose prose-sm text-text-secondary mb-6">
                                     <p className="text-[15px] leading-relaxed">
-                                        {selectedItem.summary}
+                                        {highlightSearchTerms(selectedItem.summary, query)}
                                     </p>
                                 </div>
                             ) : (
                                 <div className="text-text-muted italic mb-6">No summary available</div>
                             )}
+
+                            {/* Relevance Explanation */}
+                            <div className="mb-6">
+                                <p className="text-[13px] text-text-muted">
+                                    {generateRelevanceExplanation(selectedItem, query)}
+                                </p>
+                            </div>
 
                             <div className="mt-8 pt-8 border-t border-border-subtle/50">
                                 <h4 className="text-[11px] uppercase tracking-wider text-text-muted mb-4 font-medium flex items-center gap-2">
@@ -404,7 +451,7 @@ export const CommandPalette = () => {
                                         <div>
                                             <span className="text-[11px] text-text-muted block mb-0.5">Relevance</span>
                                             <span className="text-[13px] text-text-primary font-medium">
-                                                {selectedItem.score ? (selectedItem.score * 100).toFixed(0) + '% Match' : 'N/A'}
+                                                {selectedItem.score !== undefined ? (selectedItem.score * 100).toFixed(0) + '% Match' : 'N/A'}
                                             </span>
                                         </div>
                                          {selectedItem.score !== undefined && (
